@@ -12,7 +12,7 @@
  * - Load prompt template using AGENTS[agentName].promptTemplate
  * - Create git checkpoint
  * - Start audit logging
- * - Invoke Claude SDK via runClaudePrompt
+ * - Invoke agent via executor factory (Claude SDK or Copilot SDK)
  * - Spending cap check using isSpendingCapBehavior
  * - Handle failure (rollback, audit)
  * - Validate output using AGENTS[agentName].deliverableFilename
@@ -29,10 +29,10 @@ import { isSpendingCapBehavior } from '../utils/billing-detection.js';
 import { AGENTS } from '../session-manager.js';
 import { loadPrompt } from './prompt-manager.js';
 import {
-  runClaudePrompt,
   validateAgentOutput,
   type ClaudePromptResult,
 } from '../ai/claude-executor.js';
+import { runAgentPrompt } from '../ai/executor-factory.js';
 import {
   createGitCheckpoint,
   commitGitSuccess,
@@ -149,7 +149,7 @@ export class AgentExecutionService {
     await auditSession.startAgent(agentName, prompt, attemptNumber);
 
     // 5. Execute agent
-    const result: ClaudePromptResult = await runClaudePrompt(
+    const result: ClaudePromptResult = await runAgentPrompt(
       prompt,
       repoPath,
       '', // context

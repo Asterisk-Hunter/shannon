@@ -25,6 +25,7 @@ import { ErrorCode } from '../types/errors.js';
 import { type Result, ok, err } from '../types/result.js';
 import { parseConfig } from '../config-parser.js';
 import { resolveModel } from '../ai/models.js';
+import { detectProvider } from '../ai/executor-factory.js';
 import type { ActivityLogger } from '../types/activity-logger.js';
 
 // === Repository Validation ===
@@ -230,11 +231,30 @@ async function validateCredentials(
     return ok(undefined);
   }
 
-  // 4. Check that at least one credential is present
+  // 4. Copilot mode — validate GitHub token instead of Anthropic credentials
+  const provider = detectProvider();
+  if (provider === 'copilot') {
+    const hasGithubToken = !!(process.env.COPILOT_GITHUB_TOKEN || process.env.GH_TOKEN || process.env.GITHUB_TOKEN);
+    if (!hasGithubToken) {
+      return err(
+        new PentestError(
+          'Copilot mode requires a GitHub token. Set COPILOT_GITHUB_TOKEN, GH_TOKEN, or GITHUB_TOKEN in .env',
+          'config',
+          false,
+          {},
+          ErrorCode.AUTH_FAILED
+        )
+      );
+    }
+    logger.info('GitHub token detected — Copilot credentials OK');
+    return ok(undefined);
+  }
+
+  // 5. Check that at least one Anthropic credential is present
   if (!process.env.ANTHROPIC_API_KEY && !process.env.CLAUDE_CODE_OAUTH_TOKEN) {
     return err(
       new PentestError(
-        'No API credentials found. Set ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN in .env (or use CLAUDE_CODE_USE_BEDROCK=1 for AWS Bedrock, or CLAUDE_CODE_USE_VERTEX=1 for Google Vertex AI)',
+        'No API credentials found. Set ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN in .env (or use CLAUDE_CODE_USE_BEDROCK=1 for AWS Bedrock, CLAUDE_CODE_USE_VERTEX=1 for Google Vertex AI, or COPILOT_GITHUB_TOKEN for GitHub Copilot)',
         'config',
         false,
         {},
@@ -243,7 +263,7 @@ async function validateCredentials(
     );
   }
 
-  // 5. Validate via SDK query
+  // 6. Validate via SDK query
   const authType = process.env.CLAUDE_CODE_OAUTH_TOKEN ? 'OAuth token' : 'API key';
   logger.info(`Validating ${authType} via SDK...`);
 
